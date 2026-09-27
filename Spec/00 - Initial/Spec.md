@@ -122,3 +122,17 @@ Transfers, debt principal repayments and earmark movements are **wealth-neutral*
 | Is the Hypotheek one loan? | No, two loan parts with different rates; one of them is €17,500 |
 
 Layer-specific open questions are listed at the end of each layer document.
+
+## 6. Implementation notes (v1 build, 2026-09-27)
+
+Where the first build differs from, or extends, the layer documents:
+
+| Area | Note |
+|---|---|
+| Money in the API | Amounts are **integers in minor units** plus a currency code (not decimal strings). They are exact in JSON and JS and simpler for the Android client |
+| FX source for RUB | cbr.ru is unreachable from EU hosts. The fetcher tries CBR first and falls back to the `cbr-xml-daily.ru` mirror of the official CBR rates. Providers fail independently |
+| Schema additions | `import_row.counterparty_iban`, `import_row.matched_txn_id`, `import_batch.ai_batch_id`; `debt.lender_identifier` and repayment type `group` (parent of loan parts); trade action `opening`; txn source `generated` (migration balancing); valuation source `import`; `ai_call_log.cache_read_tokens`; `account_reconciliation.note` |
+| AI | Synchronous chunks of 40 rows through `messages.parse` (structured output) with a cached system prompt. The Message Batches API path for the sheet backfill is not built yet. No refusal fallback: a refused chunk leaves its rows for manual review |
+| Imports not built yet | Generic CSV with column mapping, bunq API sync, automatic investment prices (manual prices supported) |
+| Frontend | Charts are ECharts with the validated dataviz palette. There is no offline mode. The 2FA set-up shows the otpauth URI and secret (no QR code yet) |
+| Deployment | Docker files written and the compose config validated, but the images have not been built yet (Docker Desktop was not running) |

@@ -1,0 +1,38 @@
+# Production-style deployment (Backend.md §10). Configure via .env next to this file:
+#   BUDGET_DOMAIN=budget.example.com   (Caddy gets a TLS certificate automatically)
+#   BUDGET_SECRET_KEY=<long random string>
+#   BUDGET_ANTHROPIC_API_KEY=<key for AI categorisation>
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      BUDGET_SECRET_KEY: ${BUDGET_SECRET_KEY:?set BUDGET_SECRET_KEY}
+      BUDGET_ANTHROPIC_API_KEY: ${BUDGET_ANTHROPIC_API_KEY:-}
+      BUDGET_CORS_ORIGINS: '["https://${BUDGET_DOMAIN:-localhost}"]'
+    volumes:
+      - budget-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
+    restart: unless-stopped
+    environment:
+      BUDGET_DOMAIN: ${BUDGET_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+    depends_on:
+      - backend
+
+volumes:
+  budget-data:
+  caddy-data:
