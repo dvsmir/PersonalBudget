@@ -1,2 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+
+# Local data & secrets
+backend/data/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+!.env.example
+
 # Samples hold exports of my real accounts, should never be shared
 Spec/samples/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
