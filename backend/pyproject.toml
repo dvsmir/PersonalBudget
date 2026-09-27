@@ -44,3 +44,8 @@ ignore = ["B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+"app/connectors/*" = ["E501"]
+"alembic/*" = ["E501", "I001", "UP035", "UP007"]

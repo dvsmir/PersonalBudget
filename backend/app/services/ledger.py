@@ -228,9 +228,11 @@ def snapshot(txn: Txn) -> dict:
 
 def create_txn(session: Session, d: TxnDraft, user_id: int | None, book: RateBook | None = None) -> Txn:
     accounts = validate(session, d)
-    txn = Txn(source=d.source, import_row_id=d.import_row_id, created_by=user_id, updated_by=user_id)
+    book = book or RateBook(session)
+    txn = Txn(date=d.date, kind=d.kind, source=d.source, import_row_id=d.import_row_id,
+              created_by=user_id, updated_by=user_id)
     session.add(txn)
-    _apply(session, txn, d, accounts, book or RateBook(session))
+    _apply(session, txn, d, accounts, book)
     session.flush()
     audit(session, user_id, "txn", txn.id, "create", after=snapshot(txn))
     return txn
@@ -242,8 +244,9 @@ def update_txn(session: Session, txn_id: int, d: TxnDraft, user_id: int | None) 
         raise NotFound("Txn", txn_id)
     accounts = validate(session, d)
     before = snapshot(txn)
+    book = RateBook(session)
     txn.updated_by = user_id
-    _apply(session, txn, d, accounts, RateBook(session))
+    _apply(session, txn, d, accounts, book)
     session.flush()
     audit(session, user_id, "txn", txn.id, "update", before=before, after=snapshot(txn))
     return txn

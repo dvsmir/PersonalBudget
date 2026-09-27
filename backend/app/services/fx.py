@@ -123,25 +123,67 @@ def parse_cbr(xml_text: str) -> list[tuple[date, str, Decimal, str]]:
     return out
 
 
+CBR_MIRROR = "https://www.cbr-xml-daily.ru/archive/{d:%Y/%m/%d}/daily_json.js"
+
+
+def fetch_cbr_mirror(client: httpx.Client, since: date, until: date) -> list[tuple[date, str, Decimal, str]]:
+    """Fallback for RUB when cbr.ru is unreachable (it blocks many EU hosts): the cbr-xml-daily.ru mirror
+    republishes the official CBR daily rates, one file per business day (404 on non-business days)."""
+    out = []
+    d = since
+    while d <= until:
+        resp = client.get(CBR_MIRROR.format(d=d))
+        if resp.status_code == 200:
+            data = resp.json()
+            eur = data["Valute"]["EUR"]
+            out.append((date.fromisoformat(data["Date"][:10]), "RUB", Decimal(str(eur["Value"])) / Decimal(eur["Nominal"]), "cbr"))
+        elif resp.status_code != 404:
+            resp.raise_for_status()
+        d += timedelta(days=1)
+    return out
+
+
 def fetch_rates(session: Session, since: date, currencies: set[str], client: httpx.Client | None = None) -> int:
+    """Fetch and store rates. Each provider is independent: one failing does not discard the others.
+    Raises FxFetchError listing the failures after storing whatever succeeded."""
     client = client or httpx.Client(timeout=30, follow_redirects=True)
     count = 0
+    errors: list[str] = []
     ecb_ccy = currencies - {"RUB", REF}
     if ecb_ccy:
-        url = ECB_90D if (date.today() - since).days < 85 else ECB_HIST
-        resp = client.get(url)
-        resp.raise_for_status()
-        count += upsert_rates(session, parse_ecb(resp.text, ecb_ccy, since))
+        try:
+            url = ECB_90D if (date.today() - since).days < 85 else ECB_HIST
+            resp = client.get(url)
+            resp.raise_for_status()
+            count += upsert_rates(session, parse_ecb(resp.text, ecb_ccy, since))
+        except httpx.HTTPError as e:
+            errors.append(f"ECB: {e}")
     if "RUB" in currencies:
-        params = {
-            "date_req1": since.strftime("%d/%m/%Y"),
-            "date_req2": date.today().strftime("%d/%m/%Y"),
-            "VAL_NM_RQ": CBR_EUR_CODE,
-        }
-        resp = client.get(CBR_DYNAMIC, params=params)
-        resp.raise_for_status()
-        count += upsert_rates(session, parse_cbr(resp.text))
+        try:
+            params = {
+                "date_req1": since.strftime("%d/%m/%Y"),
+                "date_req2": date.today().strftime("%d/%m/%Y"),
+                "VAL_NM_RQ": CBR_EUR_CODE,
+            }
+            resp = client.get(CBR_DYNAMIC, params=params)
+            resp.raise_for_status()
+            count += upsert_rates(session, parse_cbr(resp.text))
+        except httpx.HTTPError as e:
+            log.warning("cbr.ru failed (%s), using the cbr-xml-daily.ru mirror", e)
+            try:
+                count += upsert_rates(session, fetch_cbr_mirror(client, since, date.today()))
+            except httpx.HTTPError as e2:
+                errors.append(f"CBR: {e}; mirror: {e2}")
+    if errors:
+        raise FxFetchError(errors, count)
     return count
+
+
+class FxFetchError(Exception):
+    def __init__(self, errors: list[str], stored: int) -> None:
+        super().__init__("; ".join(errors))
+        self.errors = errors
+        self.stored = stored
 
 
 def recompute_estimated(session: Session) -> int:
