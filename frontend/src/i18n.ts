@@ -60,7 +60,7 @@ const en = {
     sheetHelp: 'Upload the xlsx export of the budget workbook. Choose years or leave empty for all.',
     years: 'Years', anchors: 'Load year-end balances', balancing: 'Generate balancing', migration: 'History migration',
     status: { new: 'New', suggested: 'Suggested', accepted: 'Accepted', skipped: 'Skipped', duplicate: 'Duplicate', committed: 'Committed' },
-    showDone: 'Show committed / skipped', statementCheck: 'Statement balance check',
+    showDone: 'Show committed / skipped', statementCheck: 'Statement balance check', needsCategory: 'Needs category',
   },
   budget: {
     plan: 'Plan', actual: 'Actual', remaining: 'Remaining', template: 'Monthly template', generate: 'Fill from template',
@@ -149,7 +149,7 @@ const ru: Dict = {
     years: 'Годы', anchors: 'Загрузить остатки на конец года', balancing: 'Сгенерировать выравнивание',
     migration: 'Перенос истории',
     status: { new: 'Новая', suggested: 'Предложено', accepted: 'Принята', skipped: 'Пропущена', duplicate: 'Дубликат', committed: 'Проведена' },
-    showDone: 'Показать проведённые / пропущенные', statementCheck: 'Сверка с остатком выписки',
+    showDone: 'Показать проведённые / пропущенные', statementCheck: 'Сверка с остатком выписки', needsCategory: 'Без категории',
   },
   budget: {
     plan: 'План', actual: 'Факт', remaining: 'Осталось', template: 'Шаблон месяца', generate: 'Заполнить из шаблона',

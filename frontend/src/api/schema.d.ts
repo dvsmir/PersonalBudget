@@ -1143,7 +1143,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Rows */
+        /**
+         * Rows
+         * @description One page of rows. A sheet batch has ~12k rows, so the review screen never loads them all.
+         */
         get: operations["rows_api_v1_imports__batch_id__rows_get"];
         put?: never;
         post?: never;
@@ -5289,7 +5292,13 @@ export interface operations {
     rows_api_v1_imports__batch_id__rows_get: {
         parameters: {
             query?: {
+                view?: string;
                 status?: string | null;
+                needs_category?: boolean;
+                year?: number | null;
+                q?: string | null;
+                offset?: number;
+                limit?: number;
             };
             header?: {
                 authorization?: string | null;
@@ -5309,7 +5318,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         [key: string]: unknown;
-                    }[];
+                    };
                 };
             };
             /** @description Validation Error */

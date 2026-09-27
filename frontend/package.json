@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "gen:api": "cd ../backend && .venv/Scripts/python -c \"import json; from app.main import app; open('../frontend/openapi.json','w').write(json.dumps(app.openapi(), indent=1))\" && cd ../frontend && npx -y openapi-typescript@7 openapi.json -o src/api/schema.d.ts",
+    "gen:api": "node scripts/gen-api.mjs",
     "test": "vitest run",
     "typecheck": "tsc -b --noEmit"
   },

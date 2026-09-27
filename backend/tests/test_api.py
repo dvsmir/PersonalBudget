@@ -70,8 +70,12 @@ def test_upload_and_review_via_api(client):
     assert r.status_code == 201, r.text
     batch = r.json()
     assert batch["source"] == "abn_mt940" and batch["status"] == "reviewing"
-    rows = client.get(f"/api/v1/imports/{batch['id']}/rows", headers=h).json()
-    assert len(rows) == 4
+    page = client.get(f"/api/v1/imports/{batch['id']}/rows", headers=h).json()
+    assert page["total"] == 4 and len(page["items"]) == 4
+    page = client.get(f"/api/v1/imports/{batch['id']}/rows", params={"limit": 2, "offset": 2}, headers=h).json()
+    assert page["total"] == 4 and len(page["items"]) == 2
+    needs = client.get(f"/api/v1/imports/{batch['id']}/rows", params={"needs_category": True}, headers=h).json()
+    assert needs["total"] == 1 and needs["items"][0]["counterparty"].startswith("Albert Heijn")
     dup = client.post("/api/v1/imports", files={"file": ("abn.sta", ABN_MT940)}, headers=h)
     assert dup.status_code == 409
     ai = client.post(f"/api/v1/imports/{batch['id']}/suggest", json={}, headers=h)

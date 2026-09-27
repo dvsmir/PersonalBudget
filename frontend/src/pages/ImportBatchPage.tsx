@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Alert, Badge, Button, Checkbox, Group, Menu, SegmentedControl, Stack, Table, Text, Title, Tooltip } from '@mantine/core'
+import { useState } from 'react'
+import { Alert, Badge, Button, Checkbox, Group, Menu, Pagination, SegmentedControl, Select, Stack, Table, Text, TextInput, Title, Tooltip } from '@mantine/core'
 import { IconChevronDown, IconSparkles } from '@tabler/icons-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { notifications } from '@mantine/notifications'
@@ -12,6 +12,7 @@ import type { ImportRowView } from '../api/reports'
 import { CategorySelect, KindBadge, Money } from '../components/common'
 
 type Filter = 'open' | 'all' | 'done'
+const PAGE = 100
 
 export default function ImportBatchPage() {
   const { batchId } = useParams()
@@ -23,15 +24,31 @@ export default function ImportBatchPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [busy, setBusy] = useState<string | null>(null)
   const batch = useQuery({ queryKey: ['imports', batchId], queryFn: () => request<ImportBatch>('GET', `/api/v1/imports/${batchId}`) })
-  const rows = useQuery({ queryKey: ['imports', batchId, 'rows'], queryFn: () => request<ImportRowView[]>('GET', `/api/v1/imports/${batchId}/rows`) })
+  const [needsCat, setNeedsCat] = useState(false)
+  const [year, setYear] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const params = new URLSearchParams({ view: filter, offset: String((page - 1) * PAGE), limit: String(PAGE) })
+  if (needsCat) params.set('needs_category', 'true')
+  if (year) params.set('year', year)
+  if (search) params.set('q', search)
+  const rows = useQuery({
+    queryKey: ['imports', batchId, 'rows', params.toString()],
+    queryFn: () => request<{ total: number; items: ImportRowView[] }>('GET', `/api/v1/imports/${batchId}/rows?${params}`),
+    placeholderData: (prev) => prev,
+  })
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['imports'] })
   }
   const stats = JSON.parse(batch.data?.stats || '{}')
-  const visible = useMemo(() => (rows.data ?? []).filter((r) =>
-    filter === 'all' ? true : filter === 'done' ? ['committed', 'skipped', 'duplicate'].includes(r.status) : !['committed', 'skipped', 'duplicate'].includes(r.status),
-  ), [rows.data, filter])
-  const acceptedCount = (rows.data ?? []).filter((r) => r.status === 'accepted').length
+  const visible = rows.data?.items ?? []
+  const total = rows.data?.total ?? 0
+  const acceptedCount: number = stats.status_counts?.accepted ?? 0
+  const resetPage = <T,>(fn: (v: T) => void) => (v: T) => {
+    fn(v)
+    setPage(1)
+    setSelected(new Set())
+  }
 
   async function run(key: string, fn: () => Promise<unknown>) {
     setBusy(key)
@@ -111,9 +128,17 @@ export default function ImportBatchPage() {
       )}
 
       <Group justify="space-between">
-        <SegmentedControl value={filter} onChange={(v) => setFilter(v as Filter)} data={[
-          { value: 'open', label: t('imp.review') }, { value: 'done', label: t('imp.showDone') }, { value: 'all', label: t('common.all') },
-        ]} />
+        <Group gap="sm">
+          <SegmentedControl value={filter} onChange={resetPage((v: string) => setFilter(v as Filter))} data={[
+            { value: 'open', label: t('imp.review') }, { value: 'done', label: t('imp.showDone') }, { value: 'all', label: t('common.all') },
+          ]} />
+          <Checkbox label={t('imp.needsCategory')} checked={needsCat} onChange={(e) => resetPage(setNeedsCat)(e.currentTarget.checked)} />
+          <Select placeholder={t('imp.years')} clearable w={100} value={year} onChange={resetPage(setYear)}
+            data={Array.from({ length: dayjs().year() - 2019 }, (_, i) => String(dayjs().year() - i))} />
+          <TextInput placeholder={t('common.search')} w={180} defaultValue={search}
+            onKeyDown={(e) => e.key === 'Enter' && resetPage(setSearch)(e.currentTarget.value)}
+            onBlur={(e) => e.currentTarget.value !== search && resetPage(setSearch)(e.currentTarget.value)} />
+        </Group>
         <Group gap={4}>
           {Object.entries((stats.status_counts ?? {}) as Record<string, number>).map(([k, v]) => (
             <Badge key={k} variant="light" color={k === 'committed' ? 'teal' : 'gray'}>{t(`imp.status.${k}`)} {v}</Badge>
@@ -197,6 +222,10 @@ export default function ImportBatchPage() {
           </Table.Tbody>
         </Table>
       </Table.ScrollContainer>
+      <Group justify="space-between">
+        <Text size="sm" c="dimmed">{total} {t('imp.rows').toLowerCase()}</Text>
+        {total > PAGE && <Pagination total={Math.ceil(total / PAGE)} value={page} onChange={(p) => { setPage(p); setSelected(new Set()) }} />}
+      </Group>
     </Stack>
   )
 }

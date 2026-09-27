@@ -1,8 +1,9 @@
 import json
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, UploadFile
-from sqlalchemy import select
+from fastapi import APIRouter, File, Form, Query, UploadFile
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import DB, CurrentUser
 from app.api.schemas import BulkRowsIn, CommitIn, ImportBatchOut, ImportRuleIO, RowPatch, SuggestIn
@@ -58,10 +59,41 @@ def get_batch(batch_id: int, user: CurrentUser, db: DB) -> ImportBatch:
     return imports.get_batch(db, batch_id)
 
 
+DONE = ("committed", "skipped", "duplicate")
+
+
 @router.get("/imports/{batch_id}/rows")
-def rows(batch_id: int, user: CurrentUser, db: DB, status: str | None = None) -> list[dict]:
-    batch = imports.get_batch(db, batch_id)
-    return [imports.row_view(r) for r in batch.rows if status is None or r.status == status]
+def rows(
+    batch_id: int, user: CurrentUser, db: DB,
+    view: str = Query("open", pattern="^(open|done|all)$"),
+    status: str | None = None,
+    needs_category: bool = False,
+    year: int | None = None,
+    q: str | None = None,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+) -> dict:
+    """One page of rows. A sheet batch has ~12k rows, so the review screen never loads them all."""
+    imports.get_batch(db, batch_id)
+    query = select(ImportRow).where(ImportRow.batch_id == batch_id)
+    if view == "open":
+        query = query.where(ImportRow.status.not_in(DONE))
+    elif view == "done":
+        query = query.where(ImportRow.status.in_(DONE))
+    if status:
+        query = query.where(ImportRow.status == status)
+    if needs_category:
+        query = query.where(ImportRow.proposed.like('%"needs_category": true%'))
+    if year:
+        query = query.where(func.substr(ImportRow.date, 1, 4) == str(year))
+    if q:
+        like = f"%{q.lower()}%"
+        query = query.where(or_(func.lower(func.coalesce(ImportRow.description, "")).like(like),
+                                func.lower(func.coalesce(ImportRow.counterparty, "")).like(like)))
+    total = db.execute(select(func.count()).select_from(query.subquery())).scalar_one()
+    page = db.scalars(query.options(selectinload(ImportRow.suggestion))
+                      .order_by(ImportRow.date, ImportRow.row_no).offset(offset).limit(limit))
+    return {"total": total, "offset": offset, "limit": limit, "items": [imports.row_view(r) for r in page]}
 
 
 @router.patch("/imports/{batch_id}/rows/{row_id}")
