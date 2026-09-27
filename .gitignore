@@ -27,3 +27,6 @@ Spec/samples/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Generated from the backend (npm run gen:api)
+frontend/openapi.json
